@@ -25,11 +25,12 @@ float neuron::calculateWithoutActivation(float* inputs) {
     return (output + bias);
 }
 
-void neuron::initialize(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro) {
+void neuron::initialize(std::default_random_engine& randomEngine, float variance) {
+    std::normal_distribution<float> normalDistro(0.0, variance);
     for (int i = 0; i < weights.size(); i++) {
         weights[i] = normalDistro(randomEngine);
     }
-    bias = normalDistro(randomEngine);
+    bias = 0;
 }
 
 void neuron::mutate(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro) {
@@ -92,9 +93,9 @@ void layer::trainingCalculateWithoutActivation(float* inputs) {
     }
 }
 
-void layer::initialize(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro) {
+void layer::initialize(std::default_random_engine& randomEngine, float variance) {
     for (int neuronIndex = 0; neuronIndex < neurons.size(); neuronIndex++) {
-        neurons[neuronIndex].initialize(randomEngine, normalDistro);
+        neurons[neuronIndex].initialize(randomEngine, variance);
     }
 }
 
@@ -256,6 +257,82 @@ void network::backPropagation(float* input, float* target, float (*activationFun
     }
 }
 
+void network::backPropagation(float* input, float* target, float (*activationFunction)(float), float (*activationFunctionDerivative)(float), float (*costFunction)(float, float), float (*costFunctionDerivative)(float, float)) {
+    // run the forward pass to store the outputs of each layer without the activation functions applied
+    trainingCalculate(input, activationFunction);
+
+    // calculate the deltas for the entire network
+    // iterate through all the layers
+    for (int layerIndex = layers.size() - 1; layerIndex >= 0; layerIndex--) {
+        // iterate through all the neurons in the current layer
+        for (int neuronIndex = 0; neuronIndex < layers[layerIndex].neurons.size(); neuronIndex++) {
+            // reset the delta before using it
+            layers[layerIndex].neurons[neuronIndex].delta = 0;
+            // on the last layer, use the cost function derivative to find the delta
+            if (layerIndex == layers.size() - 1) {
+                layers[layerIndex].neurons[neuronIndex].delta = costFunctionDerivative(layers[layerIndex].output[neuronIndex], target[neuronIndex]);
+                continue;
+            }
+            // iterate through all the outputs of the next layer (the layer closer to the output layer)
+            for (int nextNeuronIndex = 0; nextNeuronIndex < layers[layerIndex + 1].neurons.size(); nextNeuronIndex++) {
+                // sum all the derivatives of the weights from the next layer
+                layers[layerIndex].neurons[neuronIndex].delta += layers[layerIndex + 1].neurons[nextNeuronIndex].delta * layers[layerIndex + 1].neurons[nextNeuronIndex].weights[neuronIndex];
+            }
+            // multiply this sum by the derivative of the cost with respect to the current layers output, without activation since the derivative of the activation function is being used
+            layers[layerIndex].neurons[neuronIndex].delta *= activationFunctionDerivative(layers[layerIndex].noActOutput[neuronIndex]);
+        }
+    }
+
+    // calculate the final gradients of all the weights
+    for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
+        for (int neuronIndex = 0; neuronIndex < layers[layerIndex].neurons.size(); neuronIndex++) {
+            for (int weightIndex = 0; weightIndex < layers[layerIndex].neurons[neuronIndex].weights.size(); weightIndex++) {
+                // when calculating the first layers gradients, use the networks inputs since there is no other layer before the first one
+                if (layerIndex == 0) {
+                    layers[layerIndex].neurons[neuronIndex].weightGradients[weightIndex] += input[weightIndex] * layers[layerIndex].neurons[neuronIndex].delta;
+                    continue;
+                }
+                layers[layerIndex].neurons[neuronIndex].weightGradients[weightIndex] += layers[layerIndex - 1].output[weightIndex] * layers[layerIndex].neurons[neuronIndex].delta;
+            }
+            layers[layerIndex].neurons[neuronIndex].biasGradient += layers[layerIndex].neurons[neuronIndex].delta;
+        }
+    }
+}
+
+void network::addGradients(const std::vector<network>& inputNetwork) {
+    float sizeInverse = 1.0 / inputNetwork.size();
+    // iterate through all the layers and sum the gradients
+    for (size_t networkIndex = 0; networkIndex < inputNetwork.size(); networkIndex++) {
+        for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
+            // iterate through all the neurons in each layer
+            for (int neuronIndex = 0; neuronIndex < layers[layerIndex].neurons.size(); neuronIndex++) {
+                // iterate through all the weights in each layer
+                for (int weightIndex = 0; weightIndex < layers[layerIndex].neurons[neuronIndex].weights.size(); weightIndex++) {
+                    // add the input networks neurons gradients to the current networks gradients
+                    layers[layerIndex].neurons[neuronIndex].weightGradients[weightIndex] += inputNetwork[networkIndex].layers[layerIndex].neurons[neuronIndex].weightGradients[weightIndex];
+                }
+                // add the input networks neurons bias gradient to the current networks bias gradient
+                layers[layerIndex].neurons[neuronIndex].biasGradient += inputNetwork[networkIndex].layers[layerIndex].neurons[neuronIndex].biasGradient;
+            }
+        }
+    }
+    // iterate through all the layers and average the gradients
+    for (size_t networkIndex = 0; networkIndex < inputNetwork.size(); networkIndex++) {
+        for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
+            // iterate through all the neurons in each layer
+            for (int neuronIndex = 0; neuronIndex < layers[layerIndex].neurons.size(); neuronIndex++) {
+                // iterate through all the weights in each layer
+                for (int weightIndex = 0; weightIndex < layers[layerIndex].neurons[neuronIndex].weights.size(); weightIndex++) {
+                    // add the input networks neurons gradients to the current networks gradients
+                    layers[layerIndex].neurons[neuronIndex].weightGradients[weightIndex] *= sizeInverse;
+                }
+                // add the input networks neurons bias gradient to the current networks bias gradient
+                layers[layerIndex].neurons[neuronIndex].biasGradient *= sizeInverse;
+            }
+        }
+    }
+}
+
 void network::SGD(float learningRate) {
     // iterate through all the layers
     for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
@@ -334,19 +411,15 @@ void network::ADAM(float learningRate, float beta, float beta2) {
     }
 }
 
-void network::backPropagation(float* input, float* target, float (*activationFunction)(float), float (*activationFunctionDerivative)(float), float (*costFunction)(float, float), float (*costFunctionDerivative)(float, float)) {
-    // run the forward pass to store the outputs of each layer
-    calculate(input, activationFunction);
-
-    // calculate the derivatives of the output layer
-    for (int neuronIndex = 0; neuronIndex < layers[layers.size() - 1].neurons.size(); neuronIndex++) {
-        std::cout << layers[layers.size() - 1].output[neuronIndex] << '\n';
+void network::initialize(std::default_random_engine& randomEngine, float variance) {
+    for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
+        layers[layerIndex].initialize(randomEngine, variance);
     }
 }
 
-void network::initialize(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro) {
+void network::initializeXavier(std::default_random_engine& randomEngine) {
     for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
-        layers[layerIndex].initialize(randomEngine, normalDistro);
+        layers[layerIndex].initialize(randomEngine, sqrt(6.0f / (layers[layerIndex].neurons[0].weights.size() + layers[layerIndex].neurons.size())));
     }
 }
 

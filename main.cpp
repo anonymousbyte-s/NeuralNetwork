@@ -6,11 +6,14 @@
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include "NN.h"
 
-#define generations 1'000'000
+#define threadCount 6
+#define batchSize 60
+#define learningRate 0.001
 
 std::string outputFileName = "networkWeights.txt";
 
@@ -50,30 +53,12 @@ float sigmoidDerivative(float input) {
 }
 
 // cost functions
-/*float cost(float input, float target) {
-    if (input <= 0) {
-        input = std::numeric_limits<float>::lowest();
-    } else if (input > 1) {
-        input = 1;
-    }
-    return (-(target * std::log(input) + (1 - target) * std::log(1 - input)));
-}
-
-float costDerivative(float input, float target) {
-    return ((input - target) / (input * (1 - input)));
-}*/
-
 float cost(float input, float target) {
     float dif = input - target;
     return (0.5 * dif * dif);
 }
 
 float costDerivative(float input, float target) {
-    return (input - target);
-}
-
-// simplified version of the output layer derivative
-float outputLayerDerivative(float input, float target) {
     return (input - target);
 }
 
@@ -125,18 +110,6 @@ void readCSV(std::string fileName, std::vector<std::vector<float>>* outputs) {
         row.clear();
     }
     inputFile.close();
-}
-
-void printProgressBar(float progress) {
-    std::cout << '[';
-    for (int i = 0; i < 100; i++) {
-        std::cout << ((i < (int)progress) ? "#" : " ");
-    }
-    std::cout << "] " << std::setprecision(10) << progress << "%\r" << std::flush;
-    for (int i = 0; i < 120; i++) {
-        std::cout << ' ';
-    }
-    std::cout << std::setprecision(6) << '\r';
 }
 
 void setColor(int textColor = -1, bool textBright = 0, int backgroundColor = -1, bool backgroundBright = 0) {
@@ -245,11 +218,22 @@ bool unzipDataSets() {
     return (error);
 }
 
+/// @brief runs a network through a batch of the input data that starts at start index and ends at end index
+/// @param inputNetwork the network to use for calculations
+/// @param inputs the data to input to the network
+/// @param outputs the data used to compare the networks output with
+/// @param startIndex the index to start reading the input data from (inclusive)
+/// @param endIndex the index to stop reading the input data from (exclusive)
+void testNetwork(network& inputNetwork, std::vector<std::vector<float>>& inputs, std::vector<std::vector<float>>& outputs, int startIndex, int endIndex) {
+    for (int i = startIndex; i < endIndex; i++) {
+        inputNetwork.backPropagation(digitRand(inputs[i]).data(), outputs[i].data(), tanhf, tanhDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
+    }
+}
+
 int main() {
     // make the random number generator
     std::random_device rd;
     std::default_random_engine rng(rd());
-    std::normal_distribution<float> initDistro(0.0, 1);
 
     if (unzipDataSets()) {
         std::cout << "Maybe try installing unzip?\n";
@@ -263,7 +247,7 @@ int main() {
     network networkMain;
     // index 0 is the input layer, which is not stored anywhere, it is simply the inputs
     // but it is needed as the first layers neurons must have the same number of weights as inputs
-    int layerSizes[] = {784, 200, 100, 10};
+    int layerSizes[] = {784, 500, 250, 10};
     networkMain.allocateNetwork(layerSizes, sizeof(layerSizes) / sizeof(layerSizes[0]) - 1);
 
     std::vector<std::vector<float>> inputs;
@@ -346,9 +330,10 @@ int main() {
     if (input == "f") {
         readNetworkFromFile(outputFileName, &networkMain);
     } else {
-        networkMain.initialize(rng, initDistro);
+        networkMain.initializeXavier(rng);
     }
 
+    // read and process the data sets
     std::cout << "READING DATA SET\n";
     readCSV("MNIST/mnist_train.csv", &inputs);
     std::cout << "PROCESSING DATA SET\n";
@@ -374,32 +359,50 @@ int main() {
     std::cout << "TRAINING\n";
 
     // train the network
-    float learingRate = 0.002;
     auto trainingStart = std::chrono::high_resolution_clock::now();
+    unsigned long epochCount = 0;
     signal(SIGINT, signalHandler);
     while (!stopTraining) {
         float errorSum = 0;
         long errors = 0;
         bool alreadyCountedError = 0;
-        for (int i = 0; i < inputs.size(); i++) {
-            networkMain.backPropagation(digitRand(inputs[i]).data(), outputs[i].data(), tanhf, tanhDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
-            float max = 0;
-            int maxIndex = 0;
-            for (int j = 0; j < outputs[0].size(); j++) {
-                if (networkMain.layers[networkMain.layers.size() - 1].output[j] > max) {
-                    max = networkMain.layers[networkMain.layers.size() - 1].output[j];
-                    maxIndex = j;
+        // iterate throug the data by the batch size
+        for (int dataIndex = 0; dataIndex < inputs.size(); dataIndex += batchSize) {
+            // split the batch between threads
+            std::vector<network> networks(threadCount, networkMain);
+            std::thread threads[threadCount];
+            for (int threadIndex = 0; threadIndex < threadCount; threadIndex++) {
+                int start = dataIndex + threadIndex * (int)(batchSize / threadCount + 0.5);
+                int end = (threadIndex == threadCount - 1) ? dataIndex + batchSize : dataIndex + (threadIndex + 1) * int(batchSize / threadCount + 0.5);
+                threads[threadIndex] = std::thread(testNetwork, std::ref(networks[threadIndex]), std::ref(inputs), std::ref(outputs), start, end);
+            }
+            // wait for each thread to finish
+            for (int threadIndex = 0; threadIndex < threadCount; threadIndex++) {
+                if (threads[threadIndex].joinable()) {
+                    threads[threadIndex].join();
                 }
             }
-            if (outputs[i][maxIndex] != 1) {
+            // sum all the networks deltas back into the main network
+            networkMain.addGradients(networks);
+            // optimize the network
+            networkMain.RMSProp(learningRate);
+            // networkMain.backPropagation(digitRand(inputs[dataIndex]).data(), outputs[dataIndex].data(), tanhf, tanhDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
+            networkMain.calculate(inputs[dataIndex].data(), tanhf, sigmoid);
+            float max = 0;
+            int maxIndex = 0;
+            for (int outputIndex = 0; outputIndex < outputs[0].size(); outputIndex++) {
+                if (networkMain.layers[networkMain.layers.size() - 1].output[outputIndex] > max) {
+                    max = networkMain.layers[networkMain.layers.size() - 1].output[outputIndex];
+                    maxIndex = outputIndex;
+                }
+            }
+            if (outputs[dataIndex][maxIndex] != 1) {
                 errors++;
             }
-            if (i % 50 == 0) {
-                networkMain.RMSProp(learingRate);
-            }
         }
-        networkMain.RMSProp(learingRate);
-        float errorRate = (float)errors / (float)inputs.size() * 100.0;
+        epochCount++;
+        networkMain.RMSProp(learningRate);
+        float errorRate = (float)errors / ((float)inputs.size() / (float)batchSize) * 100.0;
         // clear the terminal
         std::cout << "\x1b[2J\x1b[1;1H" << std::flush << '\n';
         std::cout << "Error Rate: " << errorRate << '\n';
@@ -411,6 +414,7 @@ int main() {
     auto trainingStop = std::chrono::high_resolution_clock::now();
     auto trainingDuration = std::chrono::duration_cast<std::chrono::microseconds>(trainingStop - trainingStart);
     std::cout << "Training Done, Took: " << float(trainingDuration.count() / 1'000'000.0) << " seconds" << '\n';
+    std::cout << "Average epoch time: " << float(trainingDuration.count() / 1'000'000.0) / float(epochCount) << " seconds" << '\n';
 
     std::cout << "Calculating test dataset error rate\n";
     inputs.clear();
@@ -435,7 +439,6 @@ int main() {
     }
 
     // run the data through the network
-    readNetworkFromFile("networkWeights.txt", &networkMain);
     long errors = 0;
     for (int i = 0; i < inputs.size(); i++) {
         networkMain.calculate(inputs[i].data(), tanhf, sigmoid);

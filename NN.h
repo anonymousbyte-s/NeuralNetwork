@@ -56,8 +56,8 @@ struct neuron {
 
     /// @brief initialize all of the weights in the neuron to random values
     /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters
-    /// @param normalDistro a normal distrobution that will be used with the rng to set the parameters
-    void initialize(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro);
+    /// @param variance the variance value to use
+    void initialize(std::default_random_engine& randomEngine, float variance);
 
     /// @brief add a random number to all of the weights in the neuron
     /// @param randomEngine a rng that will be used with the normal distrobution to add to the parameters
@@ -104,8 +104,8 @@ struct layer {
 
     /// @brief initialize all of the weights in all of the neurons in the layer to random values
     /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
-    /// @param normalDistro a normal distrobution that will be used with the rng to set the parameters of the neurons in the layer
-    void initialize(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro);
+    /// @param variance the variance value to use
+    void initialize(std::default_random_engine& randomEngine, float variance);
 
     /// @brief add a random number to all of the eights in all of the neurons in the layer
     /// @param randomEngine a rng that will be used with the normal distrobution to add to the parameters of the neurons in the layer
@@ -174,6 +174,10 @@ struct network {
     /// @param costFunctionDerivative pointer to the cost functions derivative
     void backPropagation(float* input, float* target, float (*activationFunction)(float), float (*activationFunctionDerivative)(float), float (*costFunction)(float, float), float (*costFunctionDerivative)(float, float));
 
+    /// @brief adds the deltas from the input network to the current one, useful for summing up deltas after using multithreading during batch learning
+    /// @param inputNetwork the network to add the deltas from
+    void addGradients(const std::vector<network>& inputNetwork);
+
     /// @brief uses stochastic gradient descent to optimize the model
     /// @param learningRate learning rate for the neurons
     void SGD(float learningRate);
@@ -191,8 +195,12 @@ struct network {
 
     /// @brief initialize all of the weights in all of the neurons in the network to random values
     /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
-    /// @param normalDistro a normal distrobution that will be used with the rng to set the parameters of the neurons in the layer
-    void initialize(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro);
+    /// @param variance the variance value to use
+    void initialize(std::default_random_engine& randomEngine, float variance);
+
+    /// @brief initialize all of the weights in all of the neurons in the network to random values with a variance calculated using the Xavier method
+    /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
+    void initializeXavier(std::default_random_engine& randomEngine);
 
     /// @brief add a random number to all of the weights in all of the neurons in the network
     /// @param randomEngine a rng that will be used with the normal distrobution to add to the parameters of the neurons in the layer
