@@ -202,6 +202,20 @@ struct network {
     /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
     void initializeXavier(std::default_random_engine& randomEngine);
 
+    /// @brief initialize all of the weights in all of the neurons in the network to random values with a variance calculated using the Xavier method
+    /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
+    /// @param index the layer to apply this initilization to
+    void initializeXavier(std::default_random_engine& randomEngine, int index);
+
+    /// @brief initialize all of the weights in all of the neurons in the network to random values with a variance calculated using the Xavier method
+    /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
+    void initializeHE(std::default_random_engine& randomEngine);
+
+    /// @brief initialize all of the weights in all of the neurons in the network to random values with a variance calculated using the Xavier method
+    /// @param randomEngine a rng that will be used with the normal distrobution to set the parameters of the neurons in the layer
+    /// @param index the layer to apply this initilization to
+    void initializeHE(std::default_random_engine& randomEngine, int index);
+
     /// @brief add a random number to all of the weights in all of the neurons in the network
     /// @param randomEngine a rng that will be used with the normal distrobution to add to the parameters of the neurons in the layer
     /// @param normalDistro a normal distrobution that will be used with the rng to add to the parameters of the neurons in the layer

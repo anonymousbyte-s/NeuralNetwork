@@ -423,6 +423,20 @@ void network::initializeXavier(std::default_random_engine& randomEngine) {
     }
 }
 
+void network::initializeXavier(std::default_random_engine& randomEngine, int index) {
+    layers[index].initialize(randomEngine, sqrt(6.0f / (layers[index].neurons[0].weights.size() + layers[index].neurons.size())));
+}
+
+void network::initializeHE(std::default_random_engine& randomEngine) {
+    for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
+        layers[layerIndex].initialize(randomEngine, sqrt(2.0f / layers[layerIndex].neurons[0].weights.size()));
+    }
+}
+
+void network::initializeHE(std::default_random_engine& randomEngine, int index) {
+    layers[index].initialize(randomEngine, sqrt(2.0f / layers[index].neurons[0].weights.size()));
+}
+
 void network::mutate(std::default_random_engine& randomEngine, std::normal_distribution<float>& normalDistro) {
     for (int layerIndex = 0; layerIndex < layers.size(); layerIndex++) {
         layers[layerIndex].mutate(randomEngine, normalDistro);

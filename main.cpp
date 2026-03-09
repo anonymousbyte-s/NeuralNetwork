@@ -17,7 +17,7 @@
 
 // index 0 is the input layer, which is not stored anywhere, it is simply the inputs
 // but it is needed as the first layers neurons must have the same number of weights as inputs
-int layerSizes[] = {784, 500, 250, 10};
+int layerSizes[] = {784, 512, 256, 10};
 
 std::string outputFileName = "networkWeights.txt";
 
@@ -230,7 +230,7 @@ bool unzipDataSets() {
 /// @param endIndex the index to stop reading the input data from (exclusive)
 void testNetwork(network& inputNetwork, std::vector<std::vector<float>>& inputs, std::vector<std::vector<float>>& outputs, int startIndex, int endIndex) {
     for (int i = startIndex; i < endIndex; i++) {
-        inputNetwork.backPropagation(digitRand(inputs[i]).data(), outputs[i].data(), tanhf, tanhDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
+        inputNetwork.backPropagation(digitRand(inputs[i]).data(), outputs[i].data(), ReLU, ReLUDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
     }
 }
 
@@ -249,8 +249,11 @@ int main() {
 
     // construct the neural network
     network networkMain;
+    network networkBest;
+    float minErrorRate = 100.0;
 
     networkMain.allocateNetwork(layerSizes, sizeof(layerSizes) / sizeof(layerSizes[0]) - 1);
+    networkBest.allocateNetwork(layerSizes, sizeof(layerSizes) / sizeof(layerSizes[0]) - 1);
 
     std::vector<std::vector<float>> inputs;
     std::vector<std::vector<float>> outputs;
@@ -294,7 +297,7 @@ int main() {
         readNetworkFromFile("networkWeights.txt", &networkMain);
         long errors = 0;
         for (int i = 0; i < inputs.size(); i++) {
-            networkMain.calculate(inputs[i].data(), tanhf, sigmoid);
+            networkMain.calculate(inputs[i].data(), ReLU, sigmoid);
             // find the predicted number
             float max = 0;
             int maxIndex = 0;
@@ -332,7 +335,10 @@ int main() {
     if (input == "f") {
         readNetworkFromFile(outputFileName, &networkMain);
     } else {
-        networkMain.initializeXavier(rng);
+        // use HE for the ReLU layers
+        networkMain.initializeHE(rng);
+        // use Xavier for the Sigmoid layers
+        networkMain.initializeXavier(rng, networkMain.layers.size() - 1);
     }
 
     // read and process the data sets
@@ -388,8 +394,8 @@ int main() {
             networkMain.addGradients(networks);
             // optimize the network
             networkMain.RMSProp(learningRate);
-            // networkMain.backPropagation(digitRand(inputs[dataIndex]).data(), outputs[dataIndex].data(), tanhf, tanhDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
-            networkMain.calculate(inputs[dataIndex].data(), tanhf, sigmoid);
+            // networkMain.backPropagation(digitRand(inputs[dataIndex]).data(), outputs[dataIndex].data(), ReLU, ReLUDerivative, sigmoid, sigmoidDerivative, cost, costDerivative);
+            networkMain.calculate(inputs[dataIndex].data(), ReLU, sigmoid);
             float max = 0;
             int maxIndex = 0;
             for (int outputIndex = 0; outputIndex < outputs[0].size(); outputIndex++) {
@@ -408,6 +414,10 @@ int main() {
         // clear the terminal
         std::cout << "\x1b[2J\x1b[1;1H" << std::flush << '\n';
         std::cout << "Error Rate: " << errorRate << '\n';
+        // save the network with the min error rate
+        if (errorRate < minErrorRate) {
+            networkBest = networkMain;
+        }
         if (errorRate <= 0.1) {
             break;
         }
@@ -443,13 +453,13 @@ int main() {
     // run the data through the network
     long errors = 0;
     for (int i = 0; i < inputs.size(); i++) {
-        networkMain.calculate(inputs[i].data(), tanhf, sigmoid);
+        networkBest.calculate(inputs[i].data(), ReLU, sigmoid);
         // find the predicted number
         float max = 0;
         int maxIndex = 0;
-        for (int j = 0; j < networkMain.layers[networkMain.layers.size() - 1].output.size(); j++) {
-            if (networkMain.layers[networkMain.layers.size() - 1].output[j] > max) {
-                max = networkMain.layers[networkMain.layers.size() - 1].output[j];
+        for (int j = 0; j < networkBest.layers[networkBest.layers.size() - 1].output.size(); j++) {
+            if (networkBest.layers[networkBest.layers.size() - 1].output[j] > max) {
+                max = networkBest.layers[networkBest.layers.size() - 1].output[j];
                 maxIndex = j;
             }
         }
@@ -464,7 +474,7 @@ int main() {
     }
     if (input == "y") {
         input = "";
-        writeNetworkToFile("networkWeights.txt", networkMain);
+        writeNetworkToFile("networkWeights.txt", networkBest);
     }
 
     return (0);
