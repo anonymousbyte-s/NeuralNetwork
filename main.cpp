@@ -15,6 +15,10 @@
 #define batchSize 60
 #define learningRate 0.001
 
+// index 0 is the input layer, which is not stored anywhere, it is simply the inputs
+// but it is needed as the first layers neurons must have the same number of weights as inputs
+int layerSizes[] = {784, 500, 250, 10};
+
 std::string outputFileName = "networkWeights.txt";
 
 std::string trainDataFileName = "mnist_train.csv";
@@ -245,9 +249,7 @@ int main() {
 
     // construct the neural network
     network networkMain;
-    // index 0 is the input layer, which is not stored anywhere, it is simply the inputs
-    // but it is needed as the first layers neurons must have the same number of weights as inputs
-    int layerSizes[] = {784, 500, 250, 10};
+
     networkMain.allocateNetwork(layerSizes, sizeof(layerSizes) / sizeof(layerSizes[0]) - 1);
 
     std::vector<std::vector<float>> inputs;
