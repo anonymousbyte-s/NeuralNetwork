@@ -13,7 +13,7 @@
 
 #define threadCount 6
 #define batchSize 60
-#define learningRate 0.001
+#define learningRate 0.0005
 
 // index 0 is the input layer, which is not stored anywhere, it is simply the inputs
 // but it is needed as the first layers neurons must have the same number of weights as inputs
@@ -411,13 +411,15 @@ int main() {
         epochCount++;
         networkMain.RMSProp(learningRate);
         float errorRate = (float)errors / ((float)inputs.size() / (float)batchSize) * 100.0;
-        // clear the terminal
-        std::cout << "\x1b[2J\x1b[1;1H" << std::flush << '\n';
-        std::cout << "Error Rate: " << errorRate << '\n';
-        // save the network with the min error rate
+	// save the network with the min error rate
         if (errorRate < minErrorRate) {
             networkBest = networkMain;
-        }
+	    minErrorRate = errorRate;
+	}
+        // clear the terminal
+        std::cout << "\x1b[2J\x1b[1;1H" << std::flush << '\n';
+        std::cout << "Best Error Rate: " << minErrorRate << '\n';
+        std::cout << "Error Rate: " << errorRate << '\n';
         if (errorRate <= 0.1) {
             break;
         }
