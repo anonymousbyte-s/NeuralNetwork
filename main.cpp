@@ -17,8 +17,8 @@
 
 std::string outputFileName = "networkWeights.txt";
 
-std::string trainDataFileName = "MNIST/mnist_train.csv";
-std::string testDataFileName = "MNIST/mnist_test.csv";
+std::string trainDataFileName = "mnist_train.csv";
+std::string testDataFileName = "mnist_test.csv";
 
 /// @brief used to exit traning early
 std::atomic<bool> stopTraining(false);
@@ -187,31 +187,31 @@ float tanhf(float input) {
 /// @brief unzips the dataset files
 /// @return false on sucess, true on fail
 bool unzipDataSets() {
-    std::ifstream fin(testDataFileName);
+    std::ifstream fin("MNIST/" + testDataFileName);
     if (!fin) {
         std::cout << "Unzipping " << testDataFileName << '\n';
-        system("unzip MNIST/mnist_test.csv.zip -d MNIST/");
+        system("unzip mnist_test.csv.zip -d MNIST/");
     }
     fin.close();
 
-    fin.open(trainDataFileName);
+    fin.open("MNIST/" + trainDataFileName);
     if (!fin) {
         std::cout << "Unzipping " << trainDataFileName << '\n';
-        system("unzip MNIST/mnist_train.csv.zip -d MNIST/");
+        system("unzip mnist_train.csv.zip -d MNIST/");
     }
     fin.close();
 
     bool error = 0;
     // test opeining both files
-    fin.open(testDataFileName);
+    fin.open("MNIST/" + testDataFileName);
     if (!fin) {
-        std::cout << "FAILED TO UNZIP " << testDataFileName;
+        std::cout << "FAILED TO UNZIP " << testDataFileName << '\n';
         error = 1;
     }
     fin.close();
-    fin.open(trainDataFileName);
+    fin.open("MNIST/" + trainDataFileName);
     if (!fin) {
-        std::cout << "FAILED TO UNZIP " << trainDataFileName;
+        std::cout << "FAILED TO UNZIP " << trainDataFileName << '\n';
         error = 1;
     }
     fin.close();
