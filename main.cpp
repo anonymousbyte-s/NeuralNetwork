@@ -411,11 +411,11 @@ int main() {
         epochCount++;
         networkMain.RMSProp(learningRate);
         float errorRate = (float)errors / ((float)inputs.size() / (float)batchSize) * 100.0;
-	// save the network with the min error rate
+        // save the network with the min error rate
         if (errorRate < minErrorRate) {
             networkBest = networkMain;
-	    minErrorRate = errorRate;
-	}
+            minErrorRate = errorRate;
+        }
         // clear the terminal
         std::cout << "\x1b[2J\x1b[1;1H" << std::flush << '\n';
         std::cout << "Best Error Rate: " << minErrorRate << '\n';
