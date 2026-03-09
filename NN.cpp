@@ -513,6 +513,22 @@ void readNetworkFromFile(std::string fileName, network* output) {
 
 void writeNetworkToFile(std::string fileName, network input) {
     std::ofstream file(fileName);
+    // print out the network layer sizes
+    unsigned long totalWeights = 0;
+    unsigned long totalBiases = 0;
+    for (int layerIndex = 0; layerIndex < input.layers.size(); layerIndex++) {
+        file << "//Layer " << layerIndex << '\n';
+        file << "// Neuron Count " << input.layers[layerIndex].neurons.size() << '\n';
+        totalBiases += input.layers[layerIndex].neurons.size();
+        if (layerIndex == 0) {
+            totalWeights += input.layers[layerIndex].neurons[0].weights.size() * input.layers[layerIndex].neurons.size();
+        } else {
+            totalWeights += input.layers[layerIndex - 1].neurons.size() * input.layers[layerIndex].neurons.size();
+        }
+    }
+    file << "//Total Weights " << totalWeights << '\n';
+    file << "//Total Biases " << totalBiases << '\n';
+    file << "//Total Parameters " << totalWeights + totalBiases << "\n\n";
     input.printToFile(file);
     file.close();
 }

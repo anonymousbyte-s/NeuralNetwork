@@ -17,7 +17,7 @@
 
 // index 0 is the input layer, which is not stored anywhere, it is simply the inputs
 // but it is needed as the first layers neurons must have the same number of weights as inputs
-int layerSizes[] = {784, 10};
+int layerSizes[] = {784, 512, 256, 10};
 
 std::string outputFileName = "networkWeights.txt";
 
